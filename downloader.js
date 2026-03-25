@@ -2,17 +2,24 @@ import WebTorrent from 'webtorrent'
 import helper from './helpers.js'
 import fs from 'fs'
 import path from 'node:path'
+import os from 'os'
 
 const client = new WebTorrent({ maxConns: 55 })
 client.on('error', err => console.error('WebTorrent error:', err.message))
+
+const defaults = {
+   path:  path.join(os.homedir(), 'Downloads')
+}
 
 class Downloader {
     constructor(data) {
         Object.assign(this, data)
         this.download = false
         this.torrent = null
+        // default to downloads
+        if (!fs.existsSync(data.config.savePath)) this.savePath = defaults.path
         // build dl folder, to mark this torrent is in media library
-        this.savePath = path.join(data.config.savePath, `${data.name} -${data.imdbId}-`)
+        this.savePath = path.join(this.savePath, `${data.name} -${data.imdbId}-`)
         this.lastProgress = 0
         this.progress = 0
         this.currentThrottle = -1
@@ -111,7 +118,7 @@ class Downloader {
     }
 }
 
-export default Downloader
+export { Downloader, defaults }
 
 
 /*

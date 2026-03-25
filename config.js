@@ -2,6 +2,7 @@ import commentJson from 'comment-json'
 import path from 'path'
 import fs from 'fs'
 import { fileURLToPath } from 'url'
+import { defaults } from './downloader.js'
 
 const rootDir = path.dirname(fileURLToPath(import.meta.url))
 const configFile = 'config.json'
@@ -15,7 +16,7 @@ const defaultConfig = {
     "remote": true,
     "subdomain": false,
     "saveTorrent": true,
-    "savePath": "F:\\Torrents",
+    "savePath": defaults.path,
     "waitFor": 30000,
     "targetRes": 1080,
     "candidates": 3,

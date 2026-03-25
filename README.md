@@ -65,7 +65,7 @@ After first run, edit `config.json` in the same folder as the executable.
 | `remote` | `true` | Make the add-on available remotely via LAN and the Internet |
 | `subdomain` | `false` | Preferred subdomain (if available); only applies when `remote` is `true` |
 | `saveTorrent` | `true` | Save the selected torrent file to the folder specified by `savePath` |
-| `savePath` | `"F:\\Torrents"` | Folder to save `.torrent` files when `saveTorrent` is `true` |
+| `savePath` | `~/Downloads` | download Movies to This Folder - Defaults to Downloads |
 | `waitFor` | `30000` | Milliseconds to wait before checking if a download has started and trying the next candidate |
 | `targetRes` | `1080` | Preferred resolution; the add-on picks the closest match when `saveTorrent` is `true` |
 | `candidates` | `3` | Total number of matching torrent candidates to try |

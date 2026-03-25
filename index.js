@@ -5,7 +5,7 @@ const parseTorrent = require('parse-torrent')
 import needle from 'needle'
 import async from 'async'
 import getPort from 'get-port'
-import Downloader from './downloader.js'
+import { Downloader } from './downloader.js'
 import express from 'express'
 import jackettApi from './jackett.js'
 import tunnel from './tunnel.js'
