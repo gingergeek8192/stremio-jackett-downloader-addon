@@ -1,20 +1,25 @@
+import { createRequire } from 'module'
+const require = createRequire(import.meta.url)
 const parseTorrent = require('parse-torrent')
-const needle = require('needle')
-const async = require('async')
-const getPort = require('get-port')
 
-const express = require('express')
+import needle from 'needle'
+import async from 'async'
+import getPort from 'get-port'
+import Downloader from './downloader.js'
+import express from 'express'
+import jackettApi from './jackett.js'
+import tunnel from './tunnel.js'
+import helper from './helpers.js'
+import config from './config.js'
+import autoLaunch from './autoLaunch.js'
+import { createRequire as cr } from 'module'
+const _require = cr(import.meta.url)
+const { version } = _require('./package.json')
+
 const addon = express()
+let downloadTimer = null
 
-const jackettApi = require('./jackett')
-const tunnel = require('./tunnel')
-const helper = require('./helpers')
-
-const config = require('./config')
-
-const autoLaunch = require('./autoLaunch')
-
-const version = require('./package.json').version
+process.on('uncaughtException', err => console.error('Uncaught:', err.message))
 
 autoLaunch('Jackett Add-on', config.autoLaunch)
 
@@ -25,46 +30,28 @@ const respond = (res, data) => {
     res.send(data)
 }
 
-const manifest = { 
+const manifest = {
     "id": "org.stremio.jackett",
     "version": version,
-
     "name": "Stremio Jackett Addon",
     "description": "Stremio Add-on to get torrent results from Jackett",
-
     "icon": "https://static1.squarespace.com/static/55c17e7ae4b08ccd27be814e/t/599b81c32994ca8ff6c1cd37/1508813048508/Jackett-logo-2.jpg",
-
-    // set what type of resources we will return
-    "resources": [
-        "stream"
-    ],
-
-    // works for both movies and series
+    "resources": ["stream"],
     "types": ["movie", "series"],
-
-    // prefix of item IDs (ie: "tt0032138")
-    "idPrefixes": [ "tt" ],
-
+    "idPrefixes": ["tt"],
     "catalogs": []
-
-};
+}
 
 addon.get('/:jackettKey/manifest.json', (req, res) => {
     respond(res, manifest)
 })
 
-// utility function to create stream object from magnet or remote torrent
 const streamFromMagnet = (tor, uri, type, cb) => {
     const toStream = (parsed) => {
-
         const infoHash = parsed.infoHash.toLowerCase()
-
         let title = tor.extraTag || parsed.name
-
         const subtitle = 'Seeds: ' + tor.seeders + ' / Peers: ' + tor.peers
-
         title += (title.indexOf('\n') > -1 ? '\r\n' : '\r\n\r\n') + subtitle
-
         cb({
             name: tor.from,
             type: type,
@@ -77,44 +64,32 @@ const streamFromMagnet = (tor, uri, type, cb) => {
         toStream(parseTorrent(uri))
     } else {
         parseTorrent.remote(uri, (err, parsed) => {
-          if (err) {
-            cb(false)
-            return
-          }
-          toStream(parsed)
+            if (err) { cb(false); return }
+            toStream(parsed)
         })
     }
 }
 
-// stream response
 addon.get('/:jackettKey/stream/:type/:id.json', (req, res) => {
-
     if (!req.params.id || !req.params.jackettKey)
         return respond(res, { streams: [] })
 
     let results = []
-
     let sentResponse = false
 
-    const respondStreams = () => {
-
+    const respondStreams = (imdbId, name) => {
         if (sentResponse) return
         sentResponse = true
 
         if (results && results.length) {
-
-            tempResults = results
-
-            // filter out torrents with less then 3 seeds
+            let tempResults = results
 
             if (config.minimumSeeds)
-                tempResults = tempResults.filter(el => { return !!(el.seeders && el.seeders > config.minimumSeeds -1) })
+                tempResults = tempResults.filter(el => !!(el.seeders && el.seeders > config.minimumSeeds - 1))
 
-            // order by seeds desc
+            tempResults = tempResults.sort((a, b) => a.seeders < b.seeders ? 1 : -1)
 
-            tempResults = tempResults.sort((a, b) => { return a.seeders < b.seeders ? 1 : -1 })
-
-            // limit to 15 results
+            const passToDL = tempResults
 
             if (config.maximumResults)
                 tempResults = tempResults.slice(0, config.maximumResults)
@@ -124,13 +99,9 @@ addon.get('/:jackettKey/stream/:type/:id.json', (req, res) => {
             const q = async.queue((task, callback) => {
                 if (task && (task.magneturl || task.link)) {
                     const url = task.magneturl || task.link
-                    // jackett links can sometimes redirect to magnet links or torrent files
-                    // we follow the redirect if needed and bring back the direct link
                     helper.followRedirect(url, url => {
-                        // convert torrents and magnet links to stream object
                         streamFromMagnet(task, url, req.params.type, stream => {
-                            if (stream)
-                                streams.push(stream)
+                            if (stream) streams.push(stream)
                             callback()
                         })
                     })
@@ -144,19 +115,28 @@ addon.get('/:jackettKey/stream/:type/:id.json', (req, res) => {
             }
 
             tempResults.forEach(elm => { q.push(elm) })
+
+            if (downloadTimer) clearTimeout(downloadTimer)
+          
+            downloadTimer = setTimeout(() => {
+            // TODO: implement tidy up scripts for fs and implement shows
+            if (req.params.type === 'movie')
+                void new Downloader({ imdbId: imdbId, name: name, results: passToDL, config: config }).handleResults()
+            .catch(err => console.error('Downloader error:', err.message))
+            }, config.downloadAfter * 60000)
+
+
         } else {
             respond(res, { streams: [] })
         }
     }
 
     const idParts = req.params.id.split(':')
-
     const imdbId = idParts[0]
 
+    
     needle.get('https://v3-cinemeta.strem.io/meta/' + req.params.type + '/' + imdbId + '.json', (err, resp, body) => {
-
         if (body && body.meta && body.meta.name && body.meta.year) {
-
             const searchQuery = {
                 name: body.meta.name,
                 year: body.meta.year,
@@ -169,25 +149,16 @@ addon.get('/:jackettKey/stream/:type/:id.json', (req, res) => {
             }
 
             jackettApi.search(req.params.jackettKey, searchQuery,
-
-                partialResponse = (tempResults) => {
-                    results = results.concat(tempResults)
-                },
-
-                endResponse = (tempResults) => {
-                    results = tempResults
-                    respondStreams()
-                })
-
+                (tempResults) => { results = results.concat(tempResults) },
+                (tempResults) => { results = tempResults; respondStreams(imdbId, searchQuery.name) }
+            )
 
             if (config.responseTimeout)
-                setTimeout(respondStreams, config.responseTimeout)
-
+                setTimeout(() => respondStreams(imdbId, searchQuery.name), config.responseTimeout)
         } else {
             respond(res, { streams: [] })
         }
     })
-
 })
 
 if (process && process.argv)
@@ -195,32 +166,22 @@ if (process && process.argv)
         if (cmdLineArg == '--remote')
             config.remote = true
         else if (cmdLineArg == '-v') {
-            // version check
             console.log('v' + version)
             process.exit()
         }
     })
 
 const runAddon = async () => {
-
     config.addonPort = await getPort({ port: config.addonPort })
-
     addon.listen(config.addonPort, () => {
-
         console.log('Add-on URL: http://127.0.0.1:'+config.addonPort+'/[my-jackett-key]/manifest.json')
-
         if (config.remote) {
-
             const remoteOpts = {}
-
-            if (config.subdomain)
-                remoteOpts.subdomain = config.subdomain
-
-            tunnel(config.addonPort, remoteOpts) 
-
-        } else
+            if (config.subdomain) remoteOpts.subdomain = config.subdomain
+            tunnel(config.addonPort, remoteOpts)
+        } else {
             console.log('Replace "[my-jackett-key]" with your Jackett API Key')
-
+        }
     })
 }
 

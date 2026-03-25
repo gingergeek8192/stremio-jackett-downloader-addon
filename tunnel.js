@@ -1,28 +1,23 @@
-
-const localtunnel = require('localtunnel')
+import localtunnel from 'localtunnel'
+import death from 'death'
 
 let allowClose = false
-
 let once
-
 let firstTime
 
 function runTunnel(addonPort, remoteOpts) {
     const tunnel = localtunnel(addonPort, remoteOpts, (err, tunnel) => {
-
         if (err) {
             console.error(err)
             return
         }
-
         if (!firstTime || !remoteOpts.subdomain) {
             firstTime = true
-            console.log('Remote Add-on URL: '+tunnel.url+'/[my-jackett-key]/manifest.json')         
+            console.log('Remote Add-on URL: '+tunnel.url+'/[my-jackett-key]/manifest.json')
             console.log('Replace "[my-jackett-key]" with your Jackett API Key')
         } else {
             console.log('Reconnected Tunnel as: '+tunnel.url)
         }
-
         if (remoteOpts.subdomain && !tunnel.url.startsWith('https://' + remoteOpts.subdomain + '.')) {
             console.log('Subdomain set but tunnel urls do not match, closing tunnel and trying again in 30 secs')
             cleanClose(30)
@@ -33,9 +28,7 @@ function runTunnel(addonPort, remoteOpts) {
         tunnel.removeListener('close', onClose)
         tunnel.removeListener('error', onError)
         tunnel.close()
-        setTimeout(() => {
-            runTunnel(addonPort, remoteOpts)
-        }, secs * 1000)
+        setTimeout(() => runTunnel(addonPort, remoteOpts), secs * 1000)
     }
 
     function onClose() { if (allowClose) process.exit() }
@@ -52,9 +45,7 @@ function runTunnel(addonPort, remoteOpts) {
 
     if (!once) {
         once = true
-
-        const cleanUp = require('death')({ uncaughtException: true })
-
+        const cleanUp = death({ uncaughtException: true })
         cleanUp((sig, err) => {
             console.error(err)
             allowClose = true
@@ -63,4 +54,4 @@ function runTunnel(addonPort, remoteOpts) {
     }
 }
 
-module.exports = runTunnel
+export default runTunnel

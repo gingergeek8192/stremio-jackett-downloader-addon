@@ -1,77 +1,57 @@
-const commentJson = require('comment-json')
+import commentJson from 'comment-json'
+import path from 'path'
+import fs from 'fs'
+import { fileURLToPath } from 'url'
 
-const path = require('path')
-const rootDir = path.dirname(process.execPath)
-
-const fs = require('fs')
-
+const rootDir = path.dirname(fileURLToPath(import.meta.url))
 const configFile = 'config.json'
 
 const defaultConfig = {
-
-	"// autoLaunch": [["// if this is set to true, the add-on will run on system start-up"]],
-	"autoLaunch": false,
-
-	"// responseTimeout": [["// for stremio add-on, in milliseconds, if timeout is reached it will respond with whatever results it already has, 0 = no timeout"]],
-	"responseTimeout": 11000,
-
-	"// addonPort": [["// port to use for stremio add-on, default is 7000"]],
-	"addonPort": 7000,
-
-	"// minimumSeeds": [["// remove torrents with less then X seeds"]],
-	"minimumSeeds": 3,
-
-	"// maximumResults": [["// maximum number of torrents to respond with, 0 = no limit"]],
-	"maximumResults": 15,
-
-	"// remote": [["// make add-on available remotely too, through LAN and the Internet"]],
-	"remote": false,
-
-	"// subdomain": [["// set the preferred subdomain (if available), only applicable if remote is set to true"]],
-	"subdomain": false,
-
-	"jackett": {
-
-		"// host": [["// self explanatory, the default port is presumed"]],
-		"host": "http://127.0.0.1:9117/",
-
-		"// readTimeout": [["// read timeout in milliseconds for http requests to jackett server, 0 = no timeout"]],
-		"readTimeout": 10000,
-
-		"// openTimeout": [["// open timeout in milliseconds for http requests to jackett server, 0 = no timeout"]],
-		"openTimeout": 10000
-
-	}
+    "autoLaunch": false,
+    "responseTimeout": 11000,
+    "addonPort": 7000,
+    "minimumSeeds": 3,
+    "maximumResults": 30,
+    "remote": true,
+    "subdomain": false,
+    "saveTorrent": true,
+    "savePath": "F:\\Torrents",
+    "waitFor": 30000,
+    "targetRes": 1080,
+    "candidates": 3,
+    "downloadAfter": 3,
+    "jackett": {
+        "host": "http://127.0.0.1:9117/",
+        "readTimeout": 10000,
+        "openTimeout": 10000
+    }
 }
 
 const readConfig = () => {
-
-	const configFilePath = path.join(rootDir, configFile)
-
-	if (fs.existsSync(configFilePath)) {
-		var config
-
-		try {
-			config = fs.readFileSync(configFilePath)
-		} catch(e) {
-			// ignore read file issues
-			return defaultConfig
-		}
-
-		return commentJson.parse(config.toString())
-	} else {
-		const configString = commentJson.stringify(defaultConfig, null, 4)
-
-		try {
-			fs.writeFileSync(configFilePath, configString)
-		} catch(e) {
-			// ignore write file issues
-			return defaultConfig
-		}
-
-		return readConfig()
-	}
-
+    const configFilePath = path.join(rootDir, configFile)
+    if (fs.existsSync(configFilePath)) {
+        var parsed
+        try {
+            const raw = fs.readFileSync(configFilePath)
+            parsed = commentJson.parse(raw.toString())
+        } catch (e) {
+            return defaultConfig
+        }
+        // Strip comment-json symbol keys, merge missing defaults, save clean file
+        const clean = { ...defaultConfig, ...JSON.parse(JSON.stringify(parsed)) }
+        if (parsed.jackett) clean.jackett = { ...defaultConfig.jackett, ...JSON.parse(JSON.stringify(parsed.jackett)) }
+        try {
+            fs.writeFileSync(configFilePath, JSON.stringify(clean, null, 4))
+        } catch (e) {}
+        return clean
+    } else {
+        try {
+            fs.writeFileSync(configFilePath, JSON.stringify(defaultConfig, null, 4))
+        } catch (e) {
+            return defaultConfig
+        }
+        return readConfig()
+    }
 }
 
-module.exports = readConfig()
+export default readConfig()
