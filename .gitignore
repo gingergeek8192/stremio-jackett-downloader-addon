@@ -33,9 +33,3 @@ release
 
 # macOS
 .DS_Store
-
-# lockfiles
-pnpm-lock.yaml
-package-lock.json
-yarn.lock
-pnpm-workspace.yaml
