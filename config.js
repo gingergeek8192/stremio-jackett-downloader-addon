@@ -20,7 +20,7 @@ const defaultConfig = {
     "waitFor": 30000,
     "targetRes": 1080,
     "candidates": 3,
-    "downloadAfter": 3,
+    "downloadAfter": 0,
     "jackett": {
         "host": "http://127.0.0.1:9117/",
         "readTimeout": 10000,

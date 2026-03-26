@@ -69,7 +69,7 @@ After first run, edit `config.json` in the same folder as the executable.
 | `waitFor` | `30000` | Milliseconds to wait before checking if a download has started and trying the next candidate |
 | `targetRes` | `1080` | Preferred resolution; the add-on picks the closest match when `saveTorrent` is `true` |
 | `candidates` | `3` | Total number of matching torrent candidates to try |
-| `downloadAfter` | `3` | Minutes to wait before downloading; resets if the user browses to another title |
+| `downloadAfter` | `3` | Minutes to wait before downloading; resets if the user browses to another title - Defaults to 20 seconds if set 0 |
 | `jackett.host` | `"http://127.0.0.1:9117/"` | Jackett server URL |
 | `jackett.readTimeout` | `10000` | Read timeout in milliseconds for Jackett HTTP requests. `0` = no timeout |
 | `jackett.openTimeout` | `10000` | Open/connect timeout in milliseconds for Jackett HTTP requests. `0` = no timeout |

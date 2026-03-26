@@ -1,3 +1,4 @@
+
 import WebTorrent from 'webtorrent'
 import helper from './helpers.js'
 import fs from 'fs'
@@ -8,21 +9,28 @@ const client = new WebTorrent({ maxConns: 55 })
 client.on('error', err => console.error('WebTorrent error:', err.message))
 
 const defaults = {
-   path:  path.join(os.homedir(), 'Downloads')
+    _next: false,
+    enqueued: [],
+    currentCandidates: [],
+    path:  path.join(os.homedir(), 'Downloads'),
+    waiting: () => defaults.enqueued.length > 0,
+    idle: () => !defaults.currentCandidates.length && !client.torrents.length,
+    enqueue: (data) => defaults.enqueued.push(data),
+    dequeue: () => defaults.enqueued.shift()
 }
 
 // { imdbId: imdbId, name: name, results: passToDL, config: config }
 class Downloader {
     constructor(data) {
         Object.assign(this, data)
-        this.download = false
+        this.downloading = false
         this.lastProgress = 0
         this.progress = 0
         this.currentThrottle = -1
     }
 
 
-    // TODO: Create a progress bar for download progress and logging
+    // TODO: Create a progress bar for downloading progress and logging
     report(torrent) {
         if (torrent.downloadSpeed > 0 && torrent.progress < 100)
             console.log(
@@ -33,15 +41,19 @@ class Downloader {
     }
 
 
-    // resets if torrent complete or does not download
-    async reset(interval, torrent=false) {
+    // resets if torrent complete or does not downloading
+    async reset(interval, torrent, done=false) {
         if (interval) clearInterval(interval)
-        if (torrent) {
-            this.progress = 0
-            await client.remove(torrent)
-            client.throttleDownload(-1)
+        this.downloading = false // Try condition
+        this.progress = 0
+        await client.remove(torrent)
+        client.throttleDownload(-1)
+        if (done) {
+            defaults.currentCandidates = []
+            if (defaults.idle() && defaults.waiting()) {
+                defaults._next = true // Edge trigger
+            }
         }
-        
     }
 
 
@@ -65,13 +77,13 @@ class Downloader {
         this.savePath = (this.config.savePath && fs.existsSync(this.config.savePath)) ? this.config.savePath : defaults.path
         const entries = await fs.promises.readdir(this.savePath)
 
-        // Check if there is a folder with imdbID return false to cancel download
+        // Check if there is a folder with imdbID return false to cancel downloading
         if (entries.some(e => e.includes(`-${this.imdbId}-`))) return false 
 
         // Build the path and create the folder
         this.savePath = path.join(this.savePath, `${this.name}-${this.imdbId}-`)
         await fs.promises.mkdir(this.savePath, { recursive: true })
-        // No imdbId found, path created, return true download and new movie
+        // No imdbId found, path created, return true downloading and new movie
         return true 
         }
     }
@@ -80,22 +92,25 @@ class Downloader {
     // Process metadata 
     async handleResults() {
         if (!this.results || !this.results.length) return
+      //  console.log('Found '+this.results.length+' results, processing '+this.candidateDownloads.length+' candidates')
 
         this.candidateDownloads = this.results
             .filter(el => el.title && el.title.toLowerCase().includes(String(this.config.targetRes)))
             .sort((a, b) => b.seeders - a.seeders)
             .slice(0, this.config.candidates) || [] // user defined slice
 
+        console.log(`Selected ${this.candidateDownloads.length} candidates`)
+        this.initial = this.candidateDownloads.length
         // Handle Jackett redirects
-        this.attempts = await Promise.all(
+        defaults.currentCandidates = await Promise.all(
             this.candidateDownloads
             .filter(c => c.magneturl || c.link)
             .map(c => new Promise(resolve => helper.followRedirect(c.magneturl || c.link, resolve)))
         )
 
-        for (const magnet of this.attempts) {
-            // Main control - But additionally handle path will block next download with imdbId if the last was a success 
-            if (this.download) return
+        for (const magnet of defaults.currentCandidates) {
+            // Main control - But additionally handle path will block next downloading with imdbId if the last was a success 
+            if (this.downloading) return
             const downloadTime = await this.handlePath()
             if (downloadTime) await this.tryTorrent(magnet)
         }
@@ -105,95 +120,55 @@ class Downloader {
     async tryTorrent(magnet) {
 
         const torrent = client.add(magnet, { path: this.savePath })
-
+        console.log(`Trying ${this.initial - this.config.candidates} of ${this.initial} candidates`)
         const interval = setInterval( async() => {
-            if (this.lastProgress === this.progress || !this.download) {
-                // Try next condition
-                this.download = false
+            if (this.lastProgress === this.progress || !this.downloading) {
+                console.log('Timeout - no progress')
                 // Remove torrent from WebTorrent and this interval
-                await this.reset(interval, torrent)
+                await this.reset(interval, torrent, defaults.currentCandidates.length == 0)
             } 
             this.lastProgress = this.progress
         }, this.config.waitFor > 10000 ? this.config.waitFor : 10000)
 
         torrent.on('download', async() => {
             this.progress = (torrent.progress * 100)
-            if (this.progress >= 100) this.attempts = []
-            // Don't try next condition
-            this.download = true
+            this.downloading = true
             this.report(torrent)
-            // Throttle the torrent toward the end - Maybe without it we get ENOBUFS error?
             this.regulate(this.progress >= 80, this.progress > 97)
         })
 
         torrent.on('done', async () => {
-        console.log("done fires")
-        // Don't try next condition
-        this.download = true
-        // Remove torrent from WebTorrent once done. Remove interval so it does not throw after class destroy 
-        await this.reset(interval, torrent)
+        console.log("done") 
+        await this.reset(interval, torrent, true)
         })
 
-        torrent.on('error', async(err) => {
-            console.error('Torrent Error:', err.message)
-            // Remove the failed download and allow handlePath to setup for the next
-            await this.handlePath(true)
-            // Try next condition
-            this.download = false
-            // Apparently WebTorrent will handle the torrent internally on error
-            await this.reset(interval)
+        torrent.on('error', async (err) => {
+            try {
+                console.error('Torrent Error:', err.message)
+                // Remove the failed downloading and allow handlePath to setup for the next
+                await this.handlePath(true)
+                await this.reset(interval, torrent, defaults.currentCandidates.length == 0)
+            } 
+            catch (innerErr) { console.error('Error handling torrent error:', innerErr)  } // Stop bubble up
         })
-
     }
     
 
 }
 
+// REACTIVE PROCESSING TRIGGER: Edge-triggered queue processing system
+// - Uses JavaScript property setter to automatically trigger processing
+// - Critical: DO NOT change this to set _next = value!
+let  _next = false
+Object.defineProperty(defaults, '_next', {
+    get() { return _next },
+    set(value) {
+        if (value && defaults.waiting()) {
+            console.log('Trying next torrent')
+            void new Downloader(defaults.dequeue()).handleResults()
+        }
+    }
+})
+
+
 export { Downloader, defaults }
-
-
-/*
-## From the WebTorrent docs:
-
-client.add(torrentId, [opts], [cb])
-client.remove(torrentId, [opts], [cb])
-client.destroy([cb])
-client.torrents — array of torrent instances
-client.get(torrentId) — returns torrent or null
-client.downloadSpeed / client.uploadSpeed / client.progress / client.ratio
-
-torrent.infoHash
-torrent.name
-torrent.files — array of file instances
-torrent.pieces
-torrent.timeRemaining
-torrent.downloaded / torrent.uploaded
-torrent.downloadSpeed / torrent.uploadSpeed
-torrent.progress / torrent.ratio
-torrent.numPeers
-torrent.path
-torrent.ready / torrent.paused / torrent.done
-torrent.destroy([opts], [cb])
-torrent.addPeer(peer)
-torrent.removePeer(peer)
-torrent.pause() / torrent.resume()
-
-Events
-infoHash — got infoHash
-metadata — got metadata
-ready — torrent ready
-warning
-error
-done — download complete
-download — chunk downloaded
-upload — chunk uploaded
-wire — connected to peer
-noPeers
-File
-file.name / file.path / file.length
-file.downloaded / file.progress
-file.select() / file.deselect()
-file.stream([opts])
-file.createReadStream([opts])
-*/
-

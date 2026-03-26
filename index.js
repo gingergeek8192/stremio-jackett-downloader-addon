@@ -1,11 +1,12 @@
 import { createRequire } from 'module'
 const require = createRequire(import.meta.url)
+// amazonq-ignore-next-line
 const parseTorrent = require('parse-torrent')
 
 import needle from 'needle'
 import async from 'async'
 import getPort from 'get-port'
-import { Downloader } from './downloader.js'
+import { Downloader, defaults } from './downloader.js'
 import express from 'express'
 import jackettApi from './jackett.js'
 import tunnel from './tunnel.js'
@@ -24,9 +25,11 @@ process.on('uncaughtException', err => console.error('Uncaught:', err.message))
 autoLaunch('Jackett Add-on', config.autoLaunch)
 
 const respond = (res, data) => {
+
     res.setHeader('Access-Control-Allow-Origin', '*')
     res.setHeader('Access-Control-Allow-Headers', '*')
     res.setHeader('Content-Type', 'application/json')
+  
     res.send(data)
 }
 
@@ -110,21 +113,19 @@ addon.get('/:jackettKey/stream/:type/:id.json', (req, res) => {
                 callback()
             }, 1)
 
-            q.drain = () => {
-                respond(res, { streams: streams })
-            }
+            q.drain = () => respond(res, { streams: streams })
+            
 
             tempResults.forEach(elm => { q.push(elm) })
 
             if (downloadTimer) clearTimeout(downloadTimer)
-          
-            downloadTimer = setTimeout(() => {
-            // TODO: implement tidy up scripts for fs and implement shows
-            if (req.params.type === 'movie')
-                void new Downloader({ imdbId: imdbId, name: name, results: passToDL, config: config }).handleResults()
-            .catch(err => console.error('Downloader error:', err.message))
-            }, config.downloadAfter * 60000)
-
+            if (req.params.type === 'movie') {
+                downloadTimer = setTimeout(() => {
+                    const data = { imdbId: imdbId, name: name, results: passToDL, config: config }
+                    if (defaults.idle()) void new Downloader(data).handleResults().catch(err => console.error('Downloader error:', err.message))
+                    else defaults.enqueue(data)
+                }, config.downloadAfter > 0 ? config.downloadAfter * 60000 : 20000)
+            }
 
         } else {
             respond(res, { streams: [] })
