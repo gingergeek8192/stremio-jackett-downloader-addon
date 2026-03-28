@@ -3,6 +3,13 @@
 ## [Unreleased]
 
 ### Added
+- `index.js` — `collections()` function: when a movie is streamed, fetches its TMDB collection, searches Jackett for each other part, and enqueues them for sequential download
+- `index.js` — TMDB API key validation guard (`config.tmdbApiKey` regex check) before triggering collection lookup
+- `downloader.js` — `isCollectionPart` flag passed through to `Downloader` to support collection-aware path handling
+- `downloader.js` — queue (`enqueued`) and reactive edge-triggered `_next` setter: when a download finishes, the next enqueued item starts automatically
+- `downloader.js` — `handlePath` detects already-downloaded titles by scanning folder names for the `imdbId`, skipping re-download if found
+
+### Added
 - `downloader.js` — new module that automatically downloads torrents via WebTorrent after a configurable delay
 - `webtorrent` dependency for torrent downloading
 - New config keys: `saveTorrent`, `savePath`, `waitFor`, `targetRes`, `candidates`, `downloadAfter`
