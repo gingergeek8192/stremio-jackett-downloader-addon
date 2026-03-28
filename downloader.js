@@ -117,11 +117,12 @@ class Downloader {
         console.log(`Selected ${this.candidateDownloads.length} candidates`)
         this.initial = this.candidateDownloads.length
         
-        states.currentCandidates = await Promise.all( 
+        states.currentCandidates = await Promise.all(
             this.candidateDownloads
-            .filter(c => c.magneturl || c.link)
-            .map(c => new Promise(resolve => helper.followRedirect(c.magneturl || c.link, resolve))) // Handle Jackett redirects
+                .filter(c => c.magneturl || c.link)
+                .map(c => helper.followRedirect(c.magneturl || c.link))
         )
+
 
         for (const magnet of states.currentCandidates) {
             if (this.downloading) return // Additionally handle path will block next downloading with imdbId if the last was a success 

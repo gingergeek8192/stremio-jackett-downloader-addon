@@ -2,6 +2,26 @@
 
 ## [Unreleased]
 
+### Changed
+- Replaced `needle` with `axios` across `index.js`, `jackett.js` and `helpers.js` — `needle` removed from dependencies
+- `jackett.js` — `search` converted from callback-based to async, returns results directly via `Promise.all` across all indexers; both streaming and completion callbacks removed
+- `jackett.js` — `getIndexers` converted to async
+- `index.js` — `respondStreams` lifted out of the route handler into a top-level `async function`, matching the style of `collections`
+- `index.js` — `streamFromMagnet` converted to async, returns stream object directly instead of taking a callback
+- `index.js` — replaced `async.queue` with a plain `for...of` loop; `async` library removed from dependencies
+- `index.js` — Jackett search query uses `imdbId` instead of movie name for more consistent results
+- `index.js` — response timeout guard uses `res.headersSent` instead of a manual `sentResponse` flag
+- `index.js` — result filtering uses a single chained `.filter().sort().slice()` with `Math.max` to enforce a minimum of 20 results
+- `helpers.js` — `followRedirect` converted to async, returns url directly instead of taking a callback
+- `helpers.js` — removed `extraTag`, `simpleName`, `isObject` and `setTicker` — no longer needed with imdbId-based search and Promise-based jackett
+- `helpers.js` — removed `video-name-parser` dependency
+- `config.js` — simplified `readConfig`, removed nested try/catch and recursive call
+- `downloader.js` — `followRedirect` call updated to use new async return style
+- Removed `pkg` build script and dependency
+- Removed `auto-launch` dependency and `autoLaunch.js`
+- Removed `localtunnel` dependency and `tunnel.js`
+- README restructured to lead with fork features; added LAN usage section; install instructions updated to run-from-source only
+
 ### Added
 - `index.js` — `collections()` function: when a movie is streamed, fetches its TMDB collection, searches Jackett for each other part, and enqueues them for sequential download
 - `index.js` — TMDB API key validation guard (`config.tmdbApiKey` regex check) before triggering collection lookup
@@ -25,56 +45,3 @@
 - Build targets narrowed to `node18-macos-x64` and `node18-win-x64`
 - Added `pkg.assets` for webtorrent in `package.json`
 - Removed deprecation notice pointing to PimpMyStremio from README
-
-### Removed
-- Comment-json annotations from default config
-
-
-### WebTorrent Reference
-
-```
-
-## From the WebTorrent docs:
-
-client.add(torrentId, [opts], [cb])
-client.remove(torrentId, [opts], [cb])
-client.destroy([cb])
-client.torrents — array of torrent instances
-client.get(torrentId) — returns torrent or null
-client.downloadSpeed / client.uploadSpeed / client.progress / client.ratio
-
-torrent.infoHash
-torrent.name
-torrent.files — array of file instances
-torrent.pieces
-torrent.timeRemaining
-torrent.downloaded / torrent.uploaded
-torrent.downloadSpeed / torrent.uploadSpeed
-torrent.progress / torrent.ratio
-torrent.numPeers
-torrent.path
-torrent.ready / torrent.paused / torrent.done
-torrent.destroy([opts], [cb])
-torrent.addPeer(peer)
-torrent.removePeer(peer)
-torrent.pause() / torrent.resume()
-
-Events
-infoHash — got infoHash
-metadata — got metadata
-ready — torrent ready
-warning
-error
-done — download complete
-download — chunk downloaded
-upload — chunk uploaded
-wire — connected to peer
-noPeers
-File
-file.name / file.path / file.length
-file.downloaded / file.progress
-file.select() / file.deselect()
-file.stream([opts])
-file.createReadStream([opts])
-
-```

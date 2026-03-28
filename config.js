@@ -30,31 +30,20 @@ const defaultConfig = {
     }
 }
 
-const readConfig = () => {
+function readConfig() {
     const configFilePath = path.join(rootDir, configFile)
-    if (fs.existsSync(configFilePath)) {
-        var parsed
-        try {
-            const raw = fs.readFileSync(configFilePath)
-            parsed = commentJson.parse(raw.toString())
-        } catch (e) {
-            return defaultConfig
-        }
-        // Strip comment-json symbol keys, merge missing states, save clean file
-        const clean = { ...defaultConfig, ...JSON.parse(JSON.stringify(parsed)) }
-        if (parsed.jackett) clean.jackett = { ...defaultConfig.jackett, ...JSON.parse(JSON.stringify(parsed.jackett)) }
-        try {
-            fs.writeFileSync(configFilePath, JSON.stringify(clean, null, 4))
-        } catch (e) {}
-        return clean
-    } else {
-        try {
-            fs.writeFileSync(configFilePath, JSON.stringify(defaultConfig, null, 4))
-        } catch (e) {
-            return defaultConfig
-        }
-        return readConfig()
-    }
+    if (!fs.existsSync(configFilePath))
+        fs.writeFileSync(configFilePath, JSON.stringify(defaultConfig, null, 4))
+
+    let parsed
+    try { parsed = commentJson.parse(fs.readFileSync(configFilePath).toString()) }
+    catch (e) { return defaultConfig }
+
+    const clean = { ...defaultConfig, ...JSON.parse(JSON.stringify(parsed)) }
+    if (parsed.jackett) clean.jackett = { ...defaultConfig.jackett, ...JSON.parse(JSON.stringify(parsed.jackett)) }
+    fs.writeFileSync(configFilePath, JSON.stringify(clean, null, 4))
+    return clean
 }
+
 
 export default readConfig()
