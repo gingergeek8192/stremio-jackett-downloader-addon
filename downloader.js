@@ -2,24 +2,39 @@
 import WebTorrent from 'webtorrent'
 import helper from './helpers.js'
 import fs from 'fs'
-import path from 'node:path'
+import path from 'path'
 import os from 'os'
+let downloadTimer = null
+
+let states = {
+    _next: false,
+    enqueued: [],
+    currentCandidates: [],
+    path: path.join(os.homedir(), 'Downloads'),
+    waiting: () => states.enqueued.length > 0,
+    idle: () => !states.currentCandidates.length && !client.torrents.length,
+    enqueue: (data) => states.enqueued.push(data),
+    dequeue: () => states.enqueued.shift(),
+
+    createDownloader({ imdbId, name, results, config } = data) {
+     //   downloadTimer = setTimeout(() => {
+            if (states.idle()) {
+                void new Downloader({ imdbId: imdbId, name: name, results: results, config: config }).handleResults().catch(err => console.error('Downloader error:', err.message))
+                console.log("Downloading", imdbId)
+            }
+            else {
+        states.enqueue({ imdbId: imdbId, name: name, results: results, config: config })
+        console.log("Enqueueing", imdbId)
+    }
+    //    }, config.downloadAfter > 0 ? config.downloadAfter * 60000 : 20000)
+
+    }
+}
+
 
 const client = new WebTorrent({ maxConns: 55 })
 client.on('error', err => console.error('WebTorrent error:', err.message))
 
-const defaults = {
-    _next: false,
-    enqueued: [],
-    currentCandidates: [],
-    path:  path.join(os.homedir(), 'Downloads'),
-    waiting: () => defaults.enqueued.length > 0,
-    idle: () => !defaults.currentCandidates.length && !client.torrents.length,
-    enqueue: (data) => defaults.enqueued.push(data),
-    dequeue: () => defaults.enqueued.shift()
-}
-
-// { imdbId: imdbId, name: name, results: passToDL, config: config }
 class Downloader {
     constructor(data) {
         Object.assign(this, data)
@@ -49,9 +64,10 @@ class Downloader {
         await client.remove(torrent)
         client.throttleDownload(-1)
         if (done) {
-            defaults.currentCandidates = []
-            if (defaults.idle() && defaults.waiting()) {
-                defaults._next = true // Edge trigger
+            states.currentCandidates = []
+            if (states.idle() && states.waiting()) {
+                console.log("_next")
+                states._next = true // Edge trigger
             }
         }
     }
@@ -68,23 +84,23 @@ class Downloader {
         this.currentThrottle = target
     }
 
-
     async handlePath(remove=false) {
-        if (remove && this.savePath) 
-            await fs.promises.rm(this.savePath, { recursive: true, force: true })
+
+      //  if (/^[a-f0-9]{32}$|^[a-zA-Z0-9_.-]{100,}$/.test(this.config.tmdbApiKey) && !this.isCollectionPart)
+      //  await getTMDB(this.imdbId)
+
+        if (remove && this.savePath) await fs.promises.rm(this.savePath, { recursive: true, force: true })
         else {
-        //  First check the base path and default if the base path in config.json is wrong
-        this.savePath = (this.config.savePath && fs.existsSync(this.config.savePath)) ? this.config.savePath : defaults.path
-        const entries = await fs.promises.readdir(this.savePath)
+            console.log('running handlePath')
 
-        // Check if there is a folder with imdbID return false to cancel downloading
-        if (entries.some(e => e.includes(`-${this.imdbId}-`))) return false 
+            this.savePath = (this.config.savePath && fs.existsSync(this.config.savePath)) ? this.config.savePath : states.path
+            const entries = await fs.promises.readdir(this.savePath)
 
-        // Build the path and create the folder
-        this.savePath = path.join(this.savePath, `${this.name}-${this.imdbId}-`)
-        await fs.promises.mkdir(this.savePath, { recursive: true })
-        // No imdbId found, path created, return true downloading and new movie
-        return true 
+            if (entries.some(e => e.includes(`${this.imdbId}`))) return false
+            const folder = this.name === this.imdbId ? this.name : `${this.name}-${this.imdbId}`
+            this.savePath = path.join(this.savePath, folder)
+            await fs.promises.mkdir(this.savePath, { recursive: true })
+            return true  // No imdbId found, path created, return true downloading and new movie
         }
     }
 
@@ -92,7 +108,6 @@ class Downloader {
     // Process metadata 
     async handleResults() {
         if (!this.results || !this.results.length) return
-      //  console.log('Found '+this.results.length+' results, processing '+this.candidateDownloads.length+' candidates')
 
         this.candidateDownloads = this.results
             .filter(el => el.title && el.title.toLowerCase().includes(String(this.config.targetRes)))
@@ -101,16 +116,15 @@ class Downloader {
 
         console.log(`Selected ${this.candidateDownloads.length} candidates`)
         this.initial = this.candidateDownloads.length
-        // Handle Jackett redirects
-        defaults.currentCandidates = await Promise.all(
+        
+        states.currentCandidates = await Promise.all( 
             this.candidateDownloads
             .filter(c => c.magneturl || c.link)
-            .map(c => new Promise(resolve => helper.followRedirect(c.magneturl || c.link, resolve)))
+            .map(c => new Promise(resolve => helper.followRedirect(c.magneturl || c.link, resolve))) // Handle Jackett redirects
         )
 
-        for (const magnet of defaults.currentCandidates) {
-            // Main control - But additionally handle path will block next downloading with imdbId if the last was a success 
-            if (this.downloading) return
+        for (const magnet of states.currentCandidates) {
+            if (this.downloading) return // Additionally handle path will block next downloading with imdbId if the last was a success 
             const downloadTime = await this.handlePath()
             if (downloadTime) await this.tryTorrent(magnet)
         }
@@ -120,12 +134,13 @@ class Downloader {
     async tryTorrent(magnet) {
 
         const torrent = client.add(magnet, { path: this.savePath })
-        console.log(`Trying ${this.initial - this.config.candidates} of ${this.initial} candidates`)
+        console.log(`Trying ${this.initial - this.config.candidates + 1} of ${this.initial} candidates`)
+
         const interval = setInterval( async() => {
             if (this.lastProgress === this.progress || !this.downloading) {
                 console.log('Timeout - no progress')
-                // Remove torrent from WebTorrent and this interval
-                await this.reset(interval, torrent, defaults.currentCandidates.length == 0)
+                await this.handlePath(true)
+                await this.reset(interval, torrent, states.currentCandidates.length == 0)
             } 
             this.lastProgress = this.progress
         }, this.config.waitFor > 10000 ? this.config.waitFor : 10000)
@@ -138,21 +153,17 @@ class Downloader {
         })
 
         torrent.on('done', async () => {
-        console.log("done") 
-        await this.reset(interval, torrent, true)
+            await this.reset(interval, torrent, true)
+            console.log("done")
         })
 
-        torrent.on('error', async (err) => {
+        torrent.on('error', async () => {
             try {
-                console.error('Torrent Error:', err.message)
-                // Remove the failed downloading and allow handlePath to setup for the next
-                await this.handlePath(true)
-                await this.reset(interval, torrent, defaults.currentCandidates.length == 0)
-            } 
-            catch (innerErr) { console.error('Error handling torrent error:', innerErr)  } // Stop bubble up
+                await this.handlePath(true) // Remove the failed downloading and allow handlePath to setup for the next
+                await this.reset(interval, torrent, states.currentCandidates.length == 0)
+            } catch (err) { console.error('Error handling torrent error:', err.message)  } // Stop bubble up
         })
     }
-    
 
 }
 
@@ -160,15 +171,13 @@ class Downloader {
 // - Uses JavaScript property setter to automatically trigger processing
 // - Critical: DO NOT change this to set _next = value!
 let  _next = false
-Object.defineProperty(defaults, '_next', {
+Object.defineProperty(states, '_next', {
     get() { return _next },
     set(value) {
-        if (value && defaults.waiting()) {
+        if (value && states.waiting()) {
             console.log('Trying next torrent')
-            void new Downloader(defaults.dequeue()).handleResults()
+            void new Downloader(states.dequeue()).handleResults()
         }
     }
 })
-
-
-export { Downloader, defaults }
+export { Downloader, downloadTimer, states }
