@@ -51,6 +51,20 @@ The downloader picks candidates by filtering results to your preferred `targetRe
 Note: Currently only movies are auto-downloaded. Series support is planned.
 
 
+## Collection Download
+
+When you stream a movie that belongs to a TMDB collection (e.g. a franchise), the add-on automatically fetches the full collection via the TMDB API, searches Jackett for each other part, and enqueues them for sequential download. Each title is checked against your `savePath` by its IMDb ID — already-downloaded titles are skipped automatically.
+
+Requires a valid `tmdbApiKey` in `config.json`. Collection downloads are queued behind any active download and processed one at a time.
+
+
+## Planned Features
+
+- Folder / library manager: organises and renames downloaded files according to the Jellyfin naming schema
+- Local media streaming for downloaded files directly in Stremio
+- Series support
+
+
 ## Configuration Reference
 
 After first run, edit `config.json` in the same folder as the executable.
@@ -73,3 +87,4 @@ After first run, edit `config.json` in the same folder as the executable.
 | `jackett.host` | `"http://127.0.0.1:9117/"` | Jackett server URL |
 | `jackett.readTimeout` | `10000` | Read timeout in milliseconds for Jackett HTTP requests. `0` = no timeout |
 | `jackett.openTimeout` | `10000` | Open/connect timeout in milliseconds for Jackett HTTP requests. `0` = no timeout |
+| `tmdbApiKey` | `""` | TMDB API key; required for collection download |

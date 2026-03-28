@@ -20,9 +20,11 @@ process.on('uncaughtException', err => console.error('Uncaught:', err.message))
 autoLaunch('Jackett Add-on', config.autoLaunch)
 
 const respond = (res, data) => {
+    
     res.setHeader('Access-Control-Allow-Origin', '*')
     res.setHeader('Access-Control-Allow-Headers', '*')
     res.setHeader('Content-Type', 'application/json')
+    
     res.send(data)
 }
 
@@ -68,6 +70,7 @@ const streamFromMagnet = (tor, uri, type, cb) => {
     let meta = { imdbId: id, parts: [] };
 
     const fetch = async(path, id, append = ``) => {
+       
        const res = await axios.get(`https://api.themoviedb.org/3/${path}/${id}?${append}api_key=${config.tmdbApiKey}`)
        return res.data
     } 
@@ -151,6 +154,7 @@ addon.get('/:jackettKey/stream/:type/:id.json', (req, res) => {
     const idParts = req.params.id.split(':')
     const imdbId = idParts[0]
 
+    
     
     needle.get('https://v3-cinemeta.strem.io/meta/' + req.params.type + '/' + imdbId + '.json', (err, resp, body) => {
         if (body && body.meta && body.meta.name && body.meta.year) {
