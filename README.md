@@ -1,45 +1,8 @@
 # Stremio Jackett Add-on
 
-Search on all your favorite torrent sites directly in Stremio!
+Search on all your favorite torrent sites directly in Stremio — with automatic downloading, collection management, and more.
 
 **This Add-on requires Stremio v4.4.10+**
-
-Note: After running the Stremio Jackett Add-on for the first time, a `config.json` file will be created in the same folder as the add-on executable. You can edit this file to configure the add-on.
-
-Note 2: The Stremio Jackett Add-on executable needs to be running (along with Jackett) in order for this add-on to work in Stremio.
-
-Note 3: Run the add-on with `--remote` (or set `remote` to `true` in `config.json`) to also receive an add-on url that will work through LAN and the Internet (instead of just locally).
-
-Note 4: Setting `autoLaunch` to `true` in `config.json` will make the add-on auto launch on system start-up.
-
-
-## Install and Usage
-
-
-### Install Jackett
-
-- [Install Jackett on Windows](https://github.com/Jackett/Jackett#installation-on-windows)
-- [Install Jackett on OSX](https://github.com/Jackett/Jackett#installation-on-macos)
-- [Install Jackett on Linux](https://github.com/Jackett/Jackett#installation-on-linux)
-
-
-### Setup Jackett
-
-Open your browser, go on [http://127.0.0.1:9117/](http://127.0.0.1:9117/). Press "+ Add Indexer", add as many indexers as you want.
-
-Copy the text from the input where it writes "API Key" from top right of the menu in Jackett.
-
-
-### Run Jackett Add-on
-
-[Download Jackett Add-on](https://github.com/BoredLama/stremio-jackett-addon/releases) for your operating system, unpack it, run it.
-
-
-### Add Jackett Add-on to Stremio
-
-Add `http://127.0.0.1:7000/[my-jackett-key]/manifest.json` (replace `[my-jackett-key]` with your Jackett API Key) as an Add-on URL in Stremio.
-
-![addlink](https://user-images.githubusercontent.com/1777923/43146711-65a33ccc-8f6a-11e8-978e-4c69640e63e3.png)
 
 
 ## Automatic Downloader
@@ -67,7 +30,7 @@ Requires a valid `tmdbApiKey` in `config.json`. Collection downloads are queued 
 
 ## Configuration Reference
 
-After first run, edit `config.json` in the same folder as the executable.
+After first run, edit `config.json` in the project root.
 
 | Key | Default | Description |
 |-----|---------|-------------|
@@ -79,12 +42,68 @@ After first run, edit `config.json` in the same folder as the executable.
 | `remote` | `true` | Make the add-on available remotely via LAN and the Internet |
 | `subdomain` | `false` | Preferred subdomain (if available); only applies when `remote` is `true` |
 | `saveTorrent` | `true` | Save the selected torrent file to the folder specified by `savePath` |
-| `savePath` | `~/Downloads` | download Movies to This Folder - Defaults to Downloads |
+| `savePath` | `~/Downloads` | Download movies to this folder |
 | `waitFor` | `30000` | Milliseconds to wait before checking if a download has started and trying the next candidate |
 | `targetRes` | `1080` | Preferred resolution; the add-on picks the closest match when `saveTorrent` is `true` |
 | `candidates` | `3` | Total number of matching torrent candidates to try |
-| `downloadAfter` | `3` | Minutes to wait before downloading; resets if the user browses to another title - Defaults to 20 seconds if set 0 |
+| `downloadAfter` | `3` | Minutes to wait before downloading; resets if the user browses to another title — defaults to 20 seconds if set to `0` |
 | `jackett.host` | `"http://127.0.0.1:9117/"` | Jackett server URL |
 | `jackett.readTimeout` | `10000` | Read timeout in milliseconds for Jackett HTTP requests. `0` = no timeout |
 | `jackett.openTimeout` | `10000` | Open/connect timeout in milliseconds for Jackett HTTP requests. `0` = no timeout |
 | `tmdbApiKey` | `""` | TMDB API key; required for collection download |
+
+
+## Install and Usage
+
+
+### Install Jackett
+
+- [Install Jackett on Windows](https://github.com/Jackett/Jackett#installation-on-windows)
+- [Install Jackett on OSX](https://github.com/Jackett/Jackett#installation-on-macos)
+- [Install Jackett on Linux](https://github.com/Jackett/Jackett#installation-on-linux)
+
+
+### Setup Jackett
+
+Open your browser, go on [http://127.0.0.1:9117/](http://127.0.0.1:9117/). Press "+ Add Indexer", add as many indexers as you want.
+
+Copy the API key from the top-right of the Jackett UI — you'll need it below.
+
+
+### Run the Add-on from Source
+
+```bash
+git clone https://github.com/BoredLama/stremio-jackett-addon.git
+cd stremio-jackett-addon
+pnpm install
+pnpm start
+```
+
+On first run, `config.json` is created in the project root. Open it and set:
+
+- `jackett.apiKey` — your Jackett API key
+- `tmdbApiKey` — your [TMDB API key](https://www.themoviedb.org/settings/api) (required for collection download)
+
+Then restart with `pnpm start`.
+
+
+### Add the Add-on to Stremio
+
+Add `http://127.0.0.1:7000/[my-jackett-key]/manifest.json` (replace `[my-jackett-key]` with your Jackett API key) as an Add-on URL in Stremio.
+
+![addlink](https://user-images.githubusercontent.com/1777923/43146711-65a33ccc-8f6a-11e8-978e-4c69640e63e3.png)
+
+Note: The add-on process must be running (along with Jackett) for the add-on to work in Stremio.
+
+Note: Setting `autoLaunch` to `true` in `config.json` will make the add-on auto launch on system start-up.
+
+
+### Using the Add-on Over LAN
+
+If you run the add-on on a server or another machine on your network, you can use it as a client from other devices without running anything locally.
+
+- macOS Stremio app: paste `http://[server-local-ip]:7000/[my-jackett-key]/manifest.json` directly into the Add-on URL field — it will work over LAN without any extra configuration.
+- Chrome (web app at [app.stremio.com](https://app.stremio.com)): enable insecure content for the Stremio web app in Chrome's site settings (`Settings → Site settings → Insecure content`, add `app.stremio.com`), then add the LAN URL as above.
+- Windows Stremio app: may not allow plain HTTP add-on URLs — untested.
+
+The server needs `remote` set to `true` in `config.json` so it binds to all interfaces rather than just localhost.
